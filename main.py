@@ -6,6 +6,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.checkbox import CheckBox
+from kivy.uix.button import Button
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.config import Config
@@ -28,11 +29,15 @@ class DraggableResizableBoxLayout(DragBehavior, BoxLayout):
         self._resize_dir = None
         self.drag_timeout = 10000000
         self.drag_distance = 0
+        self.is_clock = False
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
+            if self.is_clock and touch.button == 'right':
+                App.get_running_app().toggle_hover_mode(show=True)
+                return True
+
             x, y = touch.pos
-            # Check for resize handles first
             if abs(x - self.x) < self.resize_border or \
                abs(x - self.right) < self.resize_border or \
                abs(y - self.y) < self.resize_border or \
@@ -44,9 +49,8 @@ class DraggableResizableBoxLayout(DragBehavior, BoxLayout):
                 else: self._resize_dir = 'top'
 
                 self._resizing = True
-                return True # Consume the touch event
+                return True
 
-            # If not resizing, let the DragBehavior and children handle the event
             return super(DraggableResizableBoxLayout, self).on_touch_down(touch)
 
         return False
@@ -75,14 +79,13 @@ class ClockApp(App):
     def build(self):
         """Build the main application widget."""
         Window.clearcolor = (0, 0, 0, 0)
-
         root_layout = FloatLayout()
 
         # --- Clock Widget ---
         self.clock_widget = DraggableResizableBoxLayout(
-            orientation='vertical',
-            size_hint=(None, None), size=(250, 80), pos=(100, 300)
+            orientation='vertical', size_hint=(None, None), size=(250, 80), pos=(100, 300)
         )
+        self.clock_widget.is_clock = True
         self.clock_label = Label(text=time.strftime("%H:%M:%S"), bold=True, color=(0, 1, 0, 1))
         self.clock_widget.add_widget(self.clock_label)
         self.clock_widget.bind(size=self.update_font_size)
@@ -90,8 +93,7 @@ class ClockApp(App):
 
         # --- Menu Widget ---
         self.menu_widget = DraggableResizableBoxLayout(
-            orientation='vertical',
-            size_hint=(None, None), size=(250, 100), pos=(400, 300),
+            orientation='vertical', size_hint=(None, None), size=(250, 150), pos=(400, 300),
             spacing=5, padding=10
         )
         with self.menu_widget.canvas.before:
@@ -100,7 +102,7 @@ class ClockApp(App):
         self.menu_widget.bind(pos=lambda i,p: setattr(self.menu_bg, 'pos', p),
                               size=lambda i,s: setattr(self.menu_bg, 'size', s))
 
-        # Clock Toggle
+        # Toggles
         clock_toggle = BoxLayout(orientation='horizontal')
         clock_toggle.add_widget(Label(text='Show Clock', color=(1,1,1,1)))
         self.clock_checkbox = CheckBox(active=True)
@@ -108,7 +110,6 @@ class ClockApp(App):
         clock_toggle.add_widget(self.clock_checkbox)
         self.menu_widget.add_widget(clock_toggle)
 
-        # Chime Toggle
         chime_toggle = BoxLayout(orientation='horizontal')
         chime_toggle.add_widget(Label(text='Enable Chime', color=(1,1,1,1)))
         self.chime_checkbox = CheckBox(active=True)
@@ -116,10 +117,18 @@ class ClockApp(App):
         chime_toggle.add_widget(self.chime_checkbox)
         self.menu_widget.add_widget(chime_toggle)
 
+        # Hover Button
+        hover_button = Button(text='Hover')
+        hover_button.bind(on_press=lambda x: self.toggle_hover_mode(show=False))
+        self.menu_widget.add_widget(hover_button)
+
         root_layout.add_widget(self.menu_widget)
 
         self.update_font_size()
         return root_layout
+
+    def toggle_hover_mode(self, show):
+        self.menu_widget.opacity = 1 if show else 0
 
     def update_font_size(self, *args):
         self.clock_label.font_size = self.clock_widget.height * 0.6

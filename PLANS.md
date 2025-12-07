@@ -9,6 +9,7 @@ This document tracks the features and progress of the timekeeping utility applic
 - [x] Implement "always on top" functionality for the clock.
 - [x] Implement chime audio feedback on startup and when toggled on.
 - [x] Separate the clock into its own floating window.
+- [x] Implement "Hover Mode" to hide the menu.
 
 ## Phase 2: Customization Features
 - [x] Make the clock window resizable.
