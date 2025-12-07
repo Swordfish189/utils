@@ -74,7 +74,7 @@ class TransparentClock(tk.Tk):
 
         # Enforce minimum and maximum size
         min_width = 50
-        max_width = 500
+        max_width = 1920
         new_width = max(min_width, min(new_width, max_width))
 
         # Calculate proportional height
