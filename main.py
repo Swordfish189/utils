@@ -2,116 +2,199 @@ import time
 import datetime
 from kivy.app import App
 from kivy.core.window import Window
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.checkbox import CheckBox
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.config import Config
+from kivy.graphics import Color, Rectangle
 
 # --- Configuration ---
 Config.set('graphics', 'borderless', 1)
-Config.set('graphics', 'width', '300')
-Config.set('graphics', 'height', '150')
+Config.set('graphics', 'width', '800')
+Config.set('graphics', 'height', '600')
 Config.set('graphics', 'always_on_top', 1)
+Config.set('graphics', 'resizable', 1)
 
-class DraggableLabel(Label):
-    """ A custom Label widget that can be dragged to move the window. """
+class DraggableWidget(BoxLayout):
+    """ A custom draggable widget. """
+    def __init__(self, **kwargs):
+        super(DraggableWidget, self).__init__(**kwargs)
+        self._touch_pos = None
+
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
-            touch.ud['click_x'] = Window.left - touch.x
-            touch.ud['click_y'] = Window.top - touch.y
+            self._touch_pos = touch.pos
             return True
-        return super(DraggableLabel, self).on_touch_down(touch)
+        return super(DraggableWidget, self).on_touch_down(touch)
 
     def on_touch_move(self, touch):
-        if 'click_x' in touch.ud:
-            Window.left = touch.x + touch.ud['click_x']
-            Window.top = touch.y + touch.ud['click_y']
+        if self._touch_pos:
+            dx = touch.x - self._touch_pos[0]
+            dy = touch.y - self._touch_pos[1]
+            self.pos = (self.pos[0] + dx, self.pos[1] + dy)
             return True
-        return super(DraggableLabel, self).on_touch_move(touch)
+        return super(DraggableWidget, self).on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        if self._touch_pos:
+            self._touch_pos = None
+            return True
+        return super(DraggableWidget, self).on_touch_up(touch)
+
+class ResizableDraggableWidget(DraggableWidget):
+    """ A draggable widget that can also be resized. """
+    def __init__(self, **kwargs):
+        super(ResizableDraggableWidget, self).__init__(**kwargs)
+        self.resize_border = 15
+        self._resizing = False
+        self._resize_dir = None
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            x, y = touch.pos
+            # Check if touch is on a border for resizing
+            if abs(x - self.x) < self.resize_border:
+                self._resize_dir = 'left'
+            elif abs(x - self.right) < self.resize_border:
+                self._resize_dir = 'right'
+            elif abs(y - self.y) < self.resize_border:
+                self._resize_dir = 'bottom'
+            elif abs(y - self.top) < self.resize_border:
+                self._resize_dir = 'top'
+            else:
+                self._resize_dir = None
+
+            if self._resize_dir:
+                self._resizing = True
+                return True
+
+        return super(ResizableDraggableWidget, self).on_touch_down(touch)
+
+    def on_touch_move(self, touch):
+        if self._resizing:
+            if self._resize_dir == 'right':
+                self.width = max(50, touch.x - self.x)
+            elif self._resize_dir == 'left':
+                self.width = max(50, self.right - touch.x)
+                self.x = touch.x
+            elif self._resize_dir == 'top':
+                self.height = max(50, touch.y - self.y)
+            elif self._resize_dir == 'bottom':
+                self.height = max(50, self.top - touch.y)
+                self.y = touch.y
+            return True
+        return super(ResizableDraggableWidget, self).on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        if self._resizing:
+            self._resizing = False
+            self._resize_dir = None
+            return True
+        return super(ResizableDraggableWidget, self).on_touch_up(touch)
 
 class ClockApp(App):
     def build(self):
         """Build the main application widget."""
-        Window.clearcolor = (0, 0, 0, 0.5)
+        Window.clearcolor = (0, 0, 0, 0) # Fully transparent background
 
-        # --- Main Layout ---
-        self.root_layout = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        root_layout = FloatLayout()
 
         # --- Clock Widget ---
-        self.clock_label = DraggableLabel(
+        self.clock_widget = ResizableDraggableWidget(
+            orientation='vertical',
+            size_hint=(None, None),
+            size=(250, 80),
+            pos=(100, 300)
+        )
+        self.clock_label = Label(
             text=time.strftime("%H:%M:%S"),
-            font_size='30sp',
             bold=True,
             color=(0, 1, 0, 1)
         )
-        self.root_layout.add_widget(self.clock_label)
+        self.clock_widget.add_widget(self.clock_label)
+        self.clock_widget.bind(size=self.update_font_size)
+        root_layout.add_widget(self.clock_widget)
 
-        # --- Menu Layout ---
-        menu_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=50)
+        # --- Menu Widget ---
+        self.menu_widget = DraggableWidget(
+            orientation='vertical',
+            size_hint=(None, None),
+            size=(250, 100),
+            pos=(400, 300),
+            spacing=5,
+            padding=10
+        )
+        with self.menu_widget.canvas.before:
+            Color(0.1, 0.1, 0.1, 0.8)
+            self.menu_bg = Rectangle(size=self.menu_widget.size, pos=self.menu_widget.pos)
+        self.menu_widget.bind(pos=lambda i,p: setattr(self.menu_bg, 'pos', p),
+                              size=lambda i,s: setattr(self.menu_bg, 'size', s))
 
         # Clock Toggle
-        menu_layout.add_widget(Label(text='Show Clock'))
+        clock_toggle = BoxLayout(orientation='horizontal')
+        clock_toggle.add_widget(Label(text='Show Clock', color=(1,1,1,1)))
         self.clock_checkbox = CheckBox(active=True)
         self.clock_checkbox.bind(active=self.toggle_clock_visibility)
-        menu_layout.add_widget(self.clock_checkbox)
+        clock_toggle.add_widget(self.clock_checkbox)
+        self.menu_widget.add_widget(clock_toggle)
 
         # Chime Toggle
-        menu_layout.add_widget(Label(text='Enable Chime'))
+        chime_toggle = BoxLayout(orientation='horizontal')
+        chime_toggle.add_widget(Label(text='Enable Chime', color=(1,1,1,1)))
         self.chime_checkbox = CheckBox(active=True)
         self.chime_checkbox.bind(active=self.toggle_chime)
-        menu_layout.add_widget(self.chime_checkbox)
+        chime_toggle.add_widget(self.chime_checkbox)
+        self.menu_widget.add_widget(chime_toggle)
 
-        self.root_layout.add_widget(menu_layout)
-        return self.root_layout
+        root_layout.add_widget(self.menu_widget)
+
+        self.update_font_size() # Initial font size
+        return root_layout
+
+    def update_font_size(self, *args):
+        # Adjust font size based on the widget's height
+        self.clock_label.font_size = self.clock_widget.height * 0.6
 
     def on_start(self):
-        """Called after the application window is created."""
         Clock.schedule_interval(self.update_clock, 1)
         self.sound = SoundLoader.load('bell.wav')
         self.chime_event = None
         if self.chime_checkbox.active:
+            self.play_chime_sound()
             self.toggle_chime(None, True)
 
     def update_clock(self, *args):
-        """Updates the clock label with the current time."""
         self.clock_label.text = time.strftime("%H:%M:%S")
 
     def toggle_clock_visibility(self, checkbox, value):
-        """Shows or hides the clock label."""
-        self.clock_label.opacity = 1 if value else 0
+        self.clock_widget.opacity = 1 if value else 0
 
     def toggle_chime(self, checkbox, value):
-        """Enables or disables the hourly chime."""
-        if value:
-            if not self.chime_event:
-                self.schedule_first_chime()
-        else:
-            if self.chime_event:
-                self.chime_event.cancel()
-                self.chime_event = None
-                print("Hourly chime disabled.")
+        if value and not self.chime_event:
+            self.play_chime_sound()
+            self.schedule_first_chime()
+        elif not value and self.chime_event:
+            self.chime_event.cancel()
+            self.chime_event = None
+            print("Hourly chime disabled.")
 
     def schedule_first_chime(self):
-        """Calculates the time until the next hour and schedules the first chime."""
         now = datetime.datetime.now()
         next_hour = now.replace(minute=0, second=0, microsecond=0) + datetime.timedelta(hours=1)
         seconds_until = (next_hour - now).total_seconds()
 
-        print(f"Next chime scheduled in {seconds_until:.2f} seconds.")
+        print(f"Next chime in {seconds_until:.2f} seconds.")
         self.chime_event = Clock.schedule_once(self.start_hourly_chime, seconds_until)
 
     def start_hourly_chime(self, *args):
-        """Plays the first chime and schedules the recurring hourly chime."""
         self.play_chime_sound()
-        # Schedule the chime to run every hour (3600 seconds) from now on.
-        # This creates only one recurring event.
         self.chime_event = Clock.schedule_interval(self.play_chime_sound, 3600)
 
     def play_chime_sound(self, *args):
-        """Plays the chime sound."""
-        print(f"Chime played at {datetime.datetime.now().strftime('%H:%M:%S')}")
+        print(f"Chime at {datetime.datetime.now().strftime('%H:%M:%S')}")
         if self.sound:
             self.sound.play()
 
