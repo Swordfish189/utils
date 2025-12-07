@@ -30,6 +30,14 @@ class DraggableResizableBoxLayout(DragBehavior, BoxLayout):
         self.drag_timeout = 10000000
         self.drag_distance = 0
         self.is_clock = False
+        with self.canvas.before:
+            Color(0, 0, 0, 0) # Transparent background
+            self.bg = Rectangle(size=self.size, pos=self.pos)
+        self.bind(pos=self.update_bg, size=self.update_bg)
+
+    def update_bg(self, *args):
+        self.bg.pos = self.pos
+        self.bg.size = self.size
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
