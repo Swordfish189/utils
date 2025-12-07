@@ -26,11 +26,19 @@ class TransparentClock(tk.Tk):
             fg="lime",  # Hacker green color
             bg="black",  # Must match the window's background for transparency
         )
-        self.label.pack()
+        self.label.pack(padx=10, pady=10)
+
+        # Create a resize handle
+        self.resize_handle = tk.Frame(self, width=10, height=10, bg="lime", cursor="sizing")
+        self.resize_handle.place(relx=1.0, rely=1.0, anchor="se")
 
         # Enable dragging the window by clicking on the label
         self.label.bind("<Button-1>", self.start_move)
         self.label.bind("<B1-Motion>", self.do_move)
+
+        # Enable resizing by clicking on the handle
+        self.resize_handle.bind("<Button-1>", self.start_resize)
+        self.resize_handle.bind("<B1-Motion>", self.do_resize)
 
         # Start updating the clock
         self.update_clock()
@@ -51,6 +59,33 @@ class TransparentClock(tk.Tk):
         x = self.winfo_pointerx() - self.click_x
         y = self.winfo_pointery() - self.click_y
         self.geometry(f"+{x}+{y}")
+
+    def start_resize(self, event):
+        """Remember the initial size and position when a resize starts."""
+        self.start_width = self.winfo_width()
+        self.start_height = self.winfo_height()
+        self.start_x = event.x_root
+        self.start_y = event.y_root
+
+    def do_resize(self, event):
+        """Resize the window proportionally based on mouse drag."""
+        delta_x = event.x_root - self.start_x
+        new_width = self.start_width + delta_x
+
+        # Enforce minimum and maximum size
+        min_width = 50
+        max_width = 500
+        new_width = max(min_width, min(new_width, max_width))
+
+        # Calculate proportional height
+        aspect_ratio = self.start_height / self.start_width
+        new_height = int(new_width * aspect_ratio)
+
+        self.geometry(f"{new_width}x{new_height}")
+
+        # Scale the font size
+        new_font_size = int(new_width / 10) # Adjust the divisor for best results
+        self.label.config(font=("Consolas", new_font_size))
 
 
 if __name__ == "__main__":
