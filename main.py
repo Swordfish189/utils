@@ -10,6 +10,7 @@ from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.config import Config
 from kivy.graphics import Color, Rectangle
+from kivy.uix.behaviors import DragBehavior
 
 # --- Configuration ---
 Config.set('graphics', 'borderless', 1)
@@ -18,114 +19,80 @@ Config.set('graphics', 'height', '600')
 Config.set('graphics', 'always_on_top', 1)
 Config.set('graphics', 'resizable', 1)
 
-class DraggableWidget(BoxLayout):
-    """ A custom draggable widget. """
+class DraggableResizableBoxLayout(DragBehavior, BoxLayout):
+    """ A draggable and resizable BoxLayout. """
     def __init__(self, **kwargs):
-        super(DraggableWidget, self).__init__(**kwargs)
-        self._touch_pos = None
-
-    def on_touch_down(self, touch):
-        if self.collide_point(*touch.pos):
-            self._touch_pos = touch.pos
-            return True
-        return super(DraggableWidget, self).on_touch_down(touch)
-
-    def on_touch_move(self, touch):
-        if self._touch_pos:
-            dx = touch.x - self._touch_pos[0]
-            dy = touch.y - self._touch_pos[1]
-            self.pos = (self.pos[0] + dx, self.pos[1] + dy)
-            return True
-        return super(DraggableWidget, self).on_touch_move(touch)
-
-    def on_touch_up(self, touch):
-        if self._touch_pos:
-            self._touch_pos = None
-            return True
-        return super(DraggableWidget, self).on_touch_up(touch)
-
-class ResizableDraggableWidget(DraggableWidget):
-    """ A draggable widget that can also be resized. """
-    def __init__(self, **kwargs):
-        super(ResizableDraggableWidget, self).__init__(**kwargs)
+        super(DraggableResizableBoxLayout, self).__init__(**kwargs)
         self.resize_border = 15
         self._resizing = False
         self._resize_dir = None
+        self.drag_timeout = 10000000
+        self.drag_distance = 0
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
             x, y = touch.pos
-            # Check if touch is on a border for resizing
-            if abs(x - self.x) < self.resize_border:
-                self._resize_dir = 'left'
-            elif abs(x - self.right) < self.resize_border:
-                self._resize_dir = 'right'
-            elif abs(y - self.y) < self.resize_border:
-                self._resize_dir = 'bottom'
-            elif abs(y - self.top) < self.resize_border:
-                self._resize_dir = 'top'
-            else:
-                self._resize_dir = None
+            # Check for resize handles first
+            if abs(x - self.x) < self.resize_border or \
+               abs(x - self.right) < self.resize_border or \
+               abs(y - self.y) < self.resize_border or \
+               abs(y - self.top) < self.resize_border:
 
-            if self._resize_dir:
+                if abs(x - self.x) < self.resize_border: self._resize_dir = 'left'
+                elif abs(x - self.right) < self.resize_border: self._resize_dir = 'right'
+                elif abs(y - self.y) < self.resize_border: self._resize_dir = 'bottom'
+                else: self._resize_dir = 'top'
+
                 self._resizing = True
-                return True
+                return True # Consume the touch event
 
-        return super(ResizableDraggableWidget, self).on_touch_down(touch)
+            # If not resizing, let the DragBehavior and children handle the event
+            return super(DraggableResizableBoxLayout, self).on_touch_down(touch)
+
+        return False
 
     def on_touch_move(self, touch):
         if self._resizing:
-            if self._resize_dir == 'right':
-                self.width = max(50, touch.x - self.x)
+            if self._resize_dir == 'right': self.width = max(50, touch.x - self.x)
             elif self._resize_dir == 'left':
                 self.width = max(50, self.right - touch.x)
                 self.x = touch.x
-            elif self._resize_dir == 'top':
-                self.height = max(50, touch.y - self.y)
+            elif self._resize_dir == 'top': self.height = max(50, touch.y - self.y)
             elif self._resize_dir == 'bottom':
                 self.height = max(50, self.top - touch.y)
                 self.y = touch.y
             return True
-        return super(ResizableDraggableWidget, self).on_touch_move(touch)
+        return super(DraggableResizableBoxLayout, self).on_touch_move(touch)
 
     def on_touch_up(self, touch):
         if self._resizing:
             self._resizing = False
             self._resize_dir = None
             return True
-        return super(ResizableDraggableWidget, self).on_touch_up(touch)
+        return super(DraggableResizableBoxLayout, self).on_touch_up(touch)
 
 class ClockApp(App):
     def build(self):
         """Build the main application widget."""
-        Window.clearcolor = (0, 0, 0, 0) # Fully transparent background
+        Window.clearcolor = (0, 0, 0, 0)
 
         root_layout = FloatLayout()
 
         # --- Clock Widget ---
-        self.clock_widget = ResizableDraggableWidget(
+        self.clock_widget = DraggableResizableBoxLayout(
             orientation='vertical',
-            size_hint=(None, None),
-            size=(250, 80),
-            pos=(100, 300)
+            size_hint=(None, None), size=(250, 80), pos=(100, 300)
         )
-        self.clock_label = Label(
-            text=time.strftime("%H:%M:%S"),
-            bold=True,
-            color=(0, 1, 0, 1)
-        )
+        self.clock_label = Label(text=time.strftime("%H:%M:%S"), bold=True, color=(0, 1, 0, 1))
         self.clock_widget.add_widget(self.clock_label)
         self.clock_widget.bind(size=self.update_font_size)
         root_layout.add_widget(self.clock_widget)
 
         # --- Menu Widget ---
-        self.menu_widget = DraggableWidget(
+        self.menu_widget = DraggableResizableBoxLayout(
             orientation='vertical',
-            size_hint=(None, None),
-            size=(250, 100),
-            pos=(400, 300),
-            spacing=5,
-            padding=10
+            size_hint=(None, None), size=(250, 100), pos=(400, 300),
+            spacing=5, padding=10
         )
         with self.menu_widget.canvas.before:
             Color(0.1, 0.1, 0.1, 0.8)
@@ -151,11 +118,10 @@ class ClockApp(App):
 
         root_layout.add_widget(self.menu_widget)
 
-        self.update_font_size() # Initial font size
+        self.update_font_size()
         return root_layout
 
     def update_font_size(self, *args):
-        # Adjust font size based on the widget's height
         self.clock_label.font_size = self.clock_widget.height * 0.6
 
     def on_start(self):
