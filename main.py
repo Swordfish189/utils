@@ -33,8 +33,8 @@ class DraggableResizableBoxLayout(DragBehavior, BoxLayout):
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
-            if self.is_clock and touch.button == 'right':
-                App.get_running_app().toggle_hover_mode(show=True)
+            if self.is_clock and App.get_running_app().is_hover_mode and touch.button == 'right':
+                App.get_running_app().toggle_hover_mode()
                 return True
 
             x, y = touch.pos
@@ -79,7 +79,11 @@ class ClockApp(App):
     def build(self):
         """Build the main application widget."""
         Window.clearcolor = (0, 0, 0, 0)
-        root_layout = FloatLayout()
+        self.is_hover_mode = False
+        self.saved_window_size = (Window.width, Window.height)
+        self.saved_clock_pos = (0, 0)
+
+        self.root_layout = FloatLayout()
 
         # --- Clock Widget ---
         self.clock_widget = DraggableResizableBoxLayout(
@@ -89,7 +93,7 @@ class ClockApp(App):
         self.clock_label = Label(text=time.strftime("%H:%M:%S"), bold=True, color=(0, 1, 0, 1))
         self.clock_widget.add_widget(self.clock_label)
         self.clock_widget.bind(size=self.update_font_size)
-        root_layout.add_widget(self.clock_widget)
+        self.root_layout.add_widget(self.clock_widget)
 
         # --- Menu Widget ---
         self.menu_widget = DraggableResizableBoxLayout(
@@ -102,7 +106,15 @@ class ClockApp(App):
         self.menu_widget.bind(pos=lambda i,p: setattr(self.menu_bg, 'pos', p),
                               size=lambda i,s: setattr(self.menu_bg, 'size', s))
 
-        # Toggles
+        # Toggles & Button
+        self.setup_menu_widgets()
+
+        self.root_layout.add_widget(self.menu_widget)
+
+        self.update_font_size()
+        return self.root_layout
+
+    def setup_menu_widgets(self):
         clock_toggle = BoxLayout(orientation='horizontal')
         clock_toggle.add_widget(Label(text='Show Clock', color=(1,1,1,1)))
         self.clock_checkbox = CheckBox(active=True)
@@ -117,18 +129,25 @@ class ClockApp(App):
         chime_toggle.add_widget(self.chime_checkbox)
         self.menu_widget.add_widget(chime_toggle)
 
-        # Hover Button
         hover_button = Button(text='Hover')
-        hover_button.bind(on_press=lambda x: self.toggle_hover_mode(show=False))
+        hover_button.bind(on_press=lambda x: self.toggle_hover_mode())
         self.menu_widget.add_widget(hover_button)
 
-        root_layout.add_widget(self.menu_widget)
-
-        self.update_font_size()
-        return root_layout
-
-    def toggle_hover_mode(self, show):
-        self.menu_widget.opacity = 1 if show else 0
+    def toggle_hover_mode(self):
+        if not self.is_hover_mode:
+            # Enter Hover Mode
+            self.is_hover_mode = True
+            self.saved_window_size = Window.size
+            self.saved_clock_pos = self.clock_widget.pos
+            self.root_layout.remove_widget(self.menu_widget)
+            Window.size = self.clock_widget.size
+            self.clock_widget.pos = (0,0)
+        else:
+            # Exit Hover Mode
+            self.is_hover_mode = False
+            Window.size = self.saved_window_size
+            self.clock_widget.pos = self.saved_clock_pos
+            self.root_layout.add_widget(self.menu_widget)
 
     def update_font_size(self, *args):
         self.clock_label.font_size = self.clock_widget.height * 0.6
